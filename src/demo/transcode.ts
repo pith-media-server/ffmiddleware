@@ -1,16 +1,19 @@
-import beamcoder, {decoder, encoder, muxerStream, Packet} from "beamcoder";
+import beamcoder from "beamcoder";
 import * as process from "process";
-import * as fs from "fs";
 
 async function go(input: string, output: string) {
-    const writeStream = fs.createWriteStream(output);
-    const spec = {start: 0, end: 10};
+    // const writeStream = fs.createWriteStream(output);
+    // const spec = {start: 0, end: 10};
 
     const params = {
         video: [
             {
                 sources: [
-                    {url: input, ms: spec, streamIndex: 0}
+                    {
+                        url: "file:" + input,
+                        // ms: spec,
+                        streamIndex: 0
+                    }
                 ],
                 filterSpec: '[in0:v] scale=1280:720, colorspace=all=bt709 [out0:v]',
                 streams: [
@@ -25,28 +28,33 @@ async function go(input: string, output: string) {
             }
         ],
         audio: [
-            {
-                sources: [
-                    {url: input, ms: spec, streamIndex: 2}
-                ],
-                filterSpec: '[in0:a] aformat=sample_fmts=fltp:channel_layouts=mono [out0:a]',
-                streams: [
-                    {
-                        name: 'aac', time_base: [1, 90000], encoderName: 'aac',
-                        codecpar: {
-                            sample_rate: 48000, format: 'fltp', frame_size: 1024,
-                            channels: 1, channel_layout: 'mono'
-                        }
-                    }
-                ]
-            },
+            // {
+            //     sources: [
+            //         {
+            //             url: "file:" + input,
+            //             // ms: spec,
+            //             streamIndex: 1
+            //         }
+            //     ],
+            //     filterSpec: '[in0:a] aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo [out0:a]',
+            //     streams: [
+            //         {
+            //             name: 'aac', time_base: [1, 48000], encoderName: 'aac',
+            //             codecpar: {
+            //                 sample_rate: 48000, format: 'fltp',
+            //                 channels: 2, channel_layout: 'stereo'
+            //             }
+            //         }
+            //     ]
+            // },
         ],
         out: {
             formatName: 'mp4',
-            options: {
-                movflags: 'empty_moov+frag_keyframe+faststart'
-            },
-            output_stream: writeStream
+            // options: {
+            //     movflags: 'empty_moov+frag_keyframe+faststart'
+            // },
+            // output_stream: writeStream,
+            url: 'file:' + output
         }
     };
 
@@ -56,4 +64,4 @@ async function go(input: string, output: string) {
 
 }
 
-go("file:" + process.argv[2], process.argv[3]);
+go(process.argv[2], process.argv[3]);
