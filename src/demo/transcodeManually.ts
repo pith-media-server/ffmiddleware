@@ -12,7 +12,7 @@ async function writeFrames(encodedFrames: { packets: Packet[] }, targetStream: S
 async function createAudioFormatFilter(audioEncoder: Encoder, inputAudioStream: Stream) : Promise<Filterer> {
     let filterOptions = {
         filterType: 'audio',
-        filterSpec: `aresample=${audioEncoder.sample_rate}, aformat=sample_fmts=${audioEncoder.sample_fmt}:channel_layouts=${audioEncoder.channel_layout}`,
+        filterSpec: `aresample=${audioEncoder.sample_rate}, aformat=sample_fmts=${audioEncoder.sample_fmt}:channel_layouts=${audioEncoder.channel_layout}, asetnsamples=n=1024:p=1`,
         inputParams: [{
             timeBase: inputAudioStream.time_base,
             sampleFormat: inputAudioStream.codecpar.format,
@@ -43,7 +43,7 @@ async function go(input: string, output: string) {
     const audioCodec = beamcoder.encoders()[mp4Format.audio_codec];
 
     const demuxer = await beamcoder.demuxer(input);
-    const inputAudioStream = demuxer.streams[2];
+    const inputAudioStream = demuxer.streams[1];
     const inputVideoStream = demuxer.streams[0];
     const audioDecoder = beamcoder.decoder({
         demuxer: demuxer,
@@ -71,14 +71,8 @@ async function go(input: string, output: string) {
     const outputVideoStream = muxer.newStream(inputVideoStream);
     const outputAudioStream = muxer.newStream({
         codecpar: {
-            name: audioEncoder.name,
-            channels: audioEncoder.channels,
-            sample_rate: audioEncoder.sample_rate,
-            format: audioEncoder.sample_fmt,
-            channel_layout: audioEncoder.channel_layout,
-            bit_rate: audioEncoder.bit_rate,
-            frame_size: audioEncoder.frame_size,
-            profile: audioEncoder.profile
+            ...audioEncoder,
+            format: audioEncoder.sample_fmt
         },
         channel_layout: audioEncoder.channel_layout,
         channels: audioEncoder.channels,
@@ -88,7 +82,7 @@ async function go(input: string, output: string) {
 
     await muxer.openIO();
     await muxer.writeHeader({
-        // movflags: 'empty_moov+frag_keyframe+faststart'
+        movflags: 'empty_moov+frag_keyframe+faststart'
     });
 
     let packet: Packet;
