@@ -1,10 +1,12 @@
 import beamcoder, {DecodedFrames, Encoder, Filterer, FiltererAudioOptions, Muxer, Packet, Stream} from "beamcoder";
 import * as process from "process";
 
+export type TimeBase = [number, number];
+
 async function writeFrames(encodedFrames: { packets: Packet[] }, targetStream: Stream, muxer: Muxer) {
     for (let encodedPackets of encodedFrames.packets) {
         encodedPackets.stream_index = targetStream.index;
-        console.log(encodedPackets.stream_index, encodedPackets.pts);
+        console.log(encodedPackets.stream_index, encodedPackets.pts, encodedPackets.duration);
         await muxer.writeFrame(encodedPackets);
     }
 }
@@ -68,7 +70,10 @@ async function go(input: string, output: string) {
 
     const audioReformatter = await createAudioFormatFilter(audioEncoder, inputAudioStream);
 
-    const outputVideoStream = muxer.newStream(inputVideoStream);
+    const outputVideoStream = muxer.newStream({
+        ...inputVideoStream,
+        time_base: [1, 16000]
+    });
     const outputAudioStream = muxer.newStream({
         codecpar: {
             ...audioEncoder,
@@ -88,6 +93,7 @@ async function go(input: string, output: string) {
     let packet: Packet;
     while (packet = await demuxer.read()) {
         if (packet.stream_index === inputVideoStream.index) {
+            adjustTimeBase(packet, inputVideoStream.time_base as TimeBase, outputVideoStream.time_base as TimeBase);
             await writeFrames({packets: [packet]}, outputVideoStream, muxer);
         } else if (packet.stream_index === inputAudioStream.index) {
             let decodedFrames = await audioDecoder.decode(packet);
@@ -100,6 +106,10 @@ async function go(input: string, output: string) {
     await writeFrames(await audioEncoder.flush(), outputAudioStream, muxer);
 
     await muxer.writeTrailer();
+}
+
+function adjustTimeBase(packet: Packet, sourceTimeBase: TimeBase, targetTimeBase: TimeBase) {
+    packet.pts = packet.pts * sourceTimeBase[0] * targetTimeBase[1] / sourceTimeBase[1] / targetTimeBase[0];
 }
 
 go("file:" + process.argv[2], process.argv[3]);
