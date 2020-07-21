@@ -52,17 +52,17 @@ async function go(input: string, output: string) {
         stream_index: inputAudioStream.index
     });
 
-    // const outputStream = fs.createWriteStream(output+".piped.mp4");
-    // const beamStreamStream = beamcoder.muxerStream({highwaterMark: 65536});
-    // beamStreamStream.pipe(outputStream);
-    // const muxer = await beamStreamStream.muxer({
-    //     format_name: mp4Format.name
-    // });
-
-    const muxer = await beamcoder.muxer({
-        filename: 'file:' + output,
+    const outputStream = fs.createWriteStream(output+".piped.mp4");
+    const beamStreamStream = beamcoder.muxerStream({highwaterMark: 65536});
+    beamStreamStream.pipe(outputStream);
+    const muxer = await beamStreamStream.muxer({
         format_name: mp4Format.name
     });
+
+    // const muxer = await beamcoder.muxer({
+    //     filename: 'file:' + output,
+    //     format_name: mp4Format.name
+    // });
 
     const audioEncoder = beamcoder.encoder({
         codec_id: audioCodec.id,
@@ -86,7 +86,9 @@ async function go(input: string, output: string) {
         name: audioEncoder.name
     });
 
-    await muxer.openIO();
+    await muxer.openIO({
+        flags: {DIRECT: true, NONBLOCK: true, WRITE: true, READ: false}
+    });
     await muxer.writeHeader({
         movflags: 'empty_moov+frag_keyframe+faststart'
     });
