@@ -1,12 +1,12 @@
 import beamcoder, {DecodedFrames, Encoder, Filterer, FiltererAudioOptions, Muxer, Packet, Stream} from "beamcoder";
 import * as process from "process";
+import * as fs from "fs";
 
 export type TimeBase = [number, number];
 
 async function writeFrames(encodedFrames: { packets: Packet[] }, targetStream: Stream, muxer: Muxer) {
     for (let encodedPackets of encodedFrames.packets) {
         encodedPackets.stream_index = targetStream.index;
-        console.log(encodedPackets.stream_index, encodedPackets.pts, encodedPackets.duration);
         await muxer.writeFrame(encodedPackets);
     }
 }
@@ -52,6 +52,13 @@ async function go(input: string, output: string) {
         stream_index: inputAudioStream.index
     });
 
+    // const outputStream = fs.createWriteStream(output+".piped.mp4");
+    // const beamStreamStream = beamcoder.muxerStream({highwaterMark: 65536});
+    // beamStreamStream.pipe(outputStream);
+    // const muxer = await beamStreamStream.muxer({
+    //     format_name: mp4Format.name
+    // });
+
     const muxer = await beamcoder.muxer({
         filename: 'file:' + output,
         format_name: mp4Format.name
@@ -63,9 +70,7 @@ async function go(input: string, output: string) {
         sample_fmt: audioCodec.sample_fmts[0],
         channels: inputAudioStream.codecpar.channels,
         channel_layout: inputAudioStream.codecpar.channel_layout,
-        time_base: [1, inputAudioStream.codecpar.sample_rate],
-        bit_rate: 127832,
-        profile: 1 // aac_low
+        time_base: [1, inputAudioStream.codecpar.sample_rate]
     });
 
     const audioReformatter = await createAudioFormatFilter(audioEncoder, inputAudioStream);
@@ -75,12 +80,8 @@ async function go(input: string, output: string) {
         time_base: [1, 16000]
     });
     const outputAudioStream = muxer.newStream({
-        codecpar: {
-            ...audioEncoder,
-            format: audioEncoder.sample_fmt
-        },
-        channel_layout: audioEncoder.channel_layout,
-        channels: audioEncoder.channels,
+        ...inputAudioStream,
+        codecpar: audioEncoder.extractParams(),
         time_base: audioEncoder.time_base,
         name: audioEncoder.name
     });

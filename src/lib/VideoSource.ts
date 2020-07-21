@@ -1,5 +1,6 @@
 import {Decoder, decoder, Demuxer, demuxer, encoder, Frame, Muxer, muxer, muxerStream, Packet, Stream} from "beamcoder";
 import path from "path";
+import {Mp4Transcoder} from "./Mp4Transcoder";
 
 export class VideoSource {
     private readonly openPromise: Promise<void>;
@@ -109,46 +110,18 @@ export class VideoSource {
         } else if (startPos !== undefined) {
             await this.demuxer.seek({pos: startPos});
         } else {
-            await this.demuxer.seek({time: 0});
+            // await this.demuxer.seek({time: 0});
         }
 
-        const stream = muxerStream({highwaterMark: 64 * 1024});
-        stream.pipe(out);
+        let mp4Transcoder = new Mp4Transcoder(this.demuxer, out, this.videoStream, this.audioStream);
 
-        const mp4Muxer = stream.muxer({format_name: 'mp4'});
-        const videoStream = mp4Muxer.newStream(this.videoStream);
-        const audioStream = mp4Muxer.newStream(this.audioStream);
+        await mp4Transcoder.init();
 
-        await mp4Muxer.openIO({flags: {DIRECT: true, NONBLOCK: true, READ: false, WRITE: true}});
-        await mp4Muxer.writeHeader({
-            movflags: 'empty_moov+frag_keyframe+faststart',
-            fflags: 'flush_packets'
-        });
-
-        let packet: Packet;
-        let firstPts: number = 0;
-        if(startTs !== undefined) {
-            firstPts = startTs;
-        }
+        let packet;
         while ((packet = await this.demuxer.read()) && (endPos === undefined || packet.pos <= endPos) && (endTs === undefined || packet.pts <= endTs)) {
-            await this.copyFrame(packet, firstPts, mp4Muxer, this.videoStream.index, videoStream.index);
-            await this.copyFrame(packet, firstPts, mp4Muxer, this.audioStream.index, audioStream.index);
+            await mp4Transcoder.write(packet);
         }
 
-        await mp4Muxer.writeTrailer();
-    }
-
-    private async copyFrame(packet: Packet, firstPts: number, mp4Muxer: Muxer, sourceStreamIndex: number, targetStreamIndex: number) {
-        if (packet.stream_index === sourceStreamIndex) {
-            console.log("packet", packet.dts, packet.pts, packet.flags);
-            packet.pts -= firstPts;
-            if (packet.dts) {
-                packet.dts -= firstPts;
-            }
-            packet.stream_index = targetStreamIndex;
-            console.log("adjusted packet", packet.dts, packet.pts);
-            if(packet.pts > 0)
-            await mp4Muxer.writeFrame(packet);
-        }
+        await mp4Transcoder.finish();
     }
 }
