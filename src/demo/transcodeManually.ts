@@ -95,7 +95,7 @@ async function go(input: string, output: string) {
         }
     }
 
-    recodeAndWrite(audioReformatter, await audioDecoder.flush(), audioEncoder, outputAudioStream, muxer);
+    await recodeAndWrite(audioReformatter, await audioDecoder.flush(), audioEncoder, outputAudioStream, muxer);
 
     await writeFrames(await audioEncoder.flush(), outputAudioStream, muxer);
 
